@@ -151,6 +151,7 @@ function startRetroArch()
    document.getElementById("btnFullscreen").disabled = false;
 
    Module['callMain'](Module['arguments']);
+   Module['resumeMainLoop']();
    document.getElementById('canvas').focus();
 }
 
@@ -190,16 +191,43 @@ function uploadData(data,name)
    FS.unlink(name);
 }
 
+var encoder = new TextEncoder();
+var message_queue = [];
+
+function retroArchSend(msg) {
+  var bytes = encoder.encode(msg+"\n");
+  message_queue.push([bytes,0]);
+}
+
 var Module =
 {
   noInitialRun: true,
   arguments: ["-v", "--menu"],
-  preRun: [],
+  preRun: [
+    function() {
+      function stdin() {
+        // Return ASCII code of character, or null if no input
+        while(message_queue.length > 0){
+          var msg = message_queue[0][0];
+          var index = message_queue[0][1];
+          if(index >= msg.length) {
+            message_queue.shift();
+          } else {
+            message_queue[0][1] = index+1;
+            // assumption: msg is a uint8array
+            return msg[index];
+          }
+        }
+        return null;
+      }
+      FS.init(stdin);
+    }
+  ],
   postRun: [],
   onRuntimeInitialized: function()
   {
      appInitialized();
-  }, 
+  },
   print: function(text)
   {
      console.log(text);
